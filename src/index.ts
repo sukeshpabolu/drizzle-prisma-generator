@@ -17,24 +17,25 @@ export const generator = generatorHandler({
 	onGenerate: async (options) => {
 		const dbType = options.datasources[0]?.provider;
 
-		let output: string;
+		let schema: string;
+		let relations: string;
 
 		switch (dbType) {
 			case 'postgres':
 			case 'postgresql': {
-				output = generatePgSchema(options);
+				[schema, relations] = generatePgSchema(options);
 
 				break;
 			}
 
 			case 'mysql': {
-				output = generateMySqlSchema(options);
+				[schema, relations] = generateMySqlSchema(options);
 
 				break;
 			}
 
 			case 'sqlite': {
-				output = generateSQLiteSchema(options);
+				[schema, relations] = generateSQLiteSchema(options);
 
 				break;
 			}
@@ -58,7 +59,12 @@ export const generator = generatorHandler({
 			? folderPath
 			: path.join(folderPath, '/schema.ts');
 
-		recursiveWrite(schemaPath, output);
+		const relationsPath = folderPath.endsWith('.ts')
+			? folderPath
+			: path.join(folderPath, '/schema.ts');
+
+		recursiveWrite(schemaPath, schema);
+		recursiveWrite(relationsPath, relations);
 	},
 });
 
