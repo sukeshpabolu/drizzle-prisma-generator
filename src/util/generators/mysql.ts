@@ -2,6 +2,7 @@ import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
+import path from 'path';
 
 const mySqlImports = new Set<string>(['mysqlTable']);
 const drizzleImports = new Set<string>([]);
@@ -279,9 +280,11 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 	let importsStr: string | undefined = [drizzleImportsStr, mySqlImportsStr].filter((e) => e !== undefined).join('\n');
 	if (!importsStr.length) importsStr = undefined;
 
+	const schemaFileName = options.schemaPath ? path.basename(options.schemaPath, path.extname(options.schemaPath)) : 'schema'
+
 	let rqbv2Imports = [
 		`import { defineRelations } from "drizzle-orm";`,
-		`import * as schema from "./schema";`
+		`import * as schema from "./${schemaFileName}";`
 	];
 
 	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));` 
