@@ -44,10 +44,6 @@
 	"publishConfig": {
 		"provenance": true
 	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/drizzle-team/drizzle-prisma-generator.git"
-	},
 	"homepage": "https://github.com/drizzle-team/drizzle-prisma-generator",
 	"dependencies": {
 		"@prisma/generator-helper": "^5.14.0"
