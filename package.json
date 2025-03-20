@@ -1,7 +1,7 @@
 {
 	"name": "drizzle-prisma-generator",
 	"author": "Drizzle Team",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"description": "Generate Drizzle schema from Prisma schema",
 	"scripts": {
 		"run": "pnpm run build && cd ../prisma-testbench && npx prisma generate dev && code ./src/db/schema.ts",
@@ -44,7 +44,6 @@
 	"publishConfig": {
 		"provenance": true
 	},
-	"homepage": "https://github.com/drizzle-team/drizzle-prisma-generator",
 	"dependencies": {
 		"@prisma/generator-helper": "^5.14.0"
 	}
