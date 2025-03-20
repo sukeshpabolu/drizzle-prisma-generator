@@ -211,7 +211,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 
 		const table = `export const ${schemaTable.name} = sqliteTable('${tableDbName}', {\n${
 			Object.values(columnFields).join(',\n')
-		}\n}${indexes.length ? `, (${schemaTable.name}) => ([\n${indexes.join(',\n')}\n])` : ''});`;
+		}\n}${indexes.length ? `, (${schemaTable.name}) => [\n${indexes.join(',\n')}\n]` : ''});`;
 
 		tables.push(table);
 

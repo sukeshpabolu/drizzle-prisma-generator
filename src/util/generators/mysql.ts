@@ -221,7 +221,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 		}
 		const table = `export const ${schemaTable.name} = mysqlTable('${tableDbName}', {\n${
 			Object.values(columnFields).join(',\n')
-		}\n}${indexes.length ? `, (${schemaTable.name}) => ([\n${indexes.join(',\n')}\n])` : ''});`;
+		}\n}${indexes.length ? `, (${schemaTable.name}) => [\n${indexes.join(',\n')}\n]` : ''});`;
 
 		tables.push(table);
 
