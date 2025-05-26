@@ -3,6 +3,7 @@ import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
 import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
+import path from 'path';
 
 const pgImports = new Set<string>();
 const drizzleImports = new Set<string>();
@@ -165,6 +166,7 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 
 	const tables: string[] = [];
 	const rqb: string[] = [];
+	const rqbv2: string[] = [];
 
 	for (const schemaTable of modelsWithImplicit) {
 		const tableDbName = s(schemaTable.dbName ?? schemaTable.name);
@@ -206,7 +208,7 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 
 			pgImports.add('foreignKey');
 
-			return `\t'${fkeyName}': foreignKey({\n\t\tname: '${fkeyName}',\n\t\tcolumns: [${
+			return `\tforeignKey({\n\t\tname: '${fkeyName}',\n\t\tcolumns: [${
 				field.relationFromFields.map((rel) => `${schemaTable.name}.${rel}`).join(', ')
 			}],\n\t\tforeignColumns: [${field.relationToFields!.map((rel) => `${field.type}.${rel}`).join(', ')}]\n\t})${
 				deleteAction && deleteAction !== 'no action' ? `\n\t\t.onDelete('${deleteAction}')` : ''
@@ -222,9 +224,7 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 				const idxName = s(idx.name ?? `${schemaTable.name}_${idx.fields.join('_')}_key`);
 				// _key comes from Prisma, if their AI is to be trusted
 
-				return `\t'${
-					idx.name ? idxName : `${idxName.slice(0, idxName.length - 4)}_unique_idx`
-				}': uniqueIndex('${idxName}')\n\t\t.on(${idx.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')})`;
+				return `\tuniqueIndex('${idxName}')\n\t\t.on(${idx.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')})`;
 			});
 
 			indexes.push(...uniques);
@@ -236,7 +236,7 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 			const pk = schemaTable.primaryKey!;
 			const pkName = s(pk.name ?? `${schemaTable.name}_cpk`);
 
-			const pkField = `\t'${pkName}': primaryKey({\n\t\tname: '${pkName}',\n\t\tcolumns: [${
+			const pkField = `\tprimaryKey({\n\t\tname: '${pkName}',\n\t\tcolumns: [${
 				pk.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')
 			}]\n\t})`;
 
@@ -245,12 +245,12 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 
 		const table = `export const ${schemaTable.name} = pgTable('${tableDbName}', {\n${
 			Object.values(columnFields).join(',\n')
-		}\n}${indexes.length ? `, (${schemaTable.name}) => ({\n${indexes.join(',\n')}\n})` : ''});`;
+		}\n}${indexes.length ? `, (${schemaTable.name}) => [\n${indexes.join(',\n')}\n]` : ''});`;
 
 		tables.push(table);
 
 		if (!relFields.length) continue;
-		drizzleImports.add('relations');
+		if (options.version == 'v1') drizzleImports.add('relations');
 
 		const relationArgs = new Set<string>();
 		const rqbFields = relFields.map((field) => {
@@ -271,6 +271,19 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 		const rqbRelation =
 			`export const ${schemaTable.name}Relations = relations(${schemaTable.name}, ({ ${argString} }) => ({\n${rqbFields}\n}));`;
 
+		const rqbv2Fields = relFields.map(field => {
+			const relName = s(field.relationName ?? '');
+			return `\t\t${field.name}: ${
+				field.relationFromFields?.length
+				? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${field.relationFromFields.at(0)},\n\t\t\tto: r.${field.type}.${
+				field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
+				: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
+			}`
+		}).join(',\n');
+
+		const rqbv2Relation = `\t${schemaTable.name}: {\n${ rqbv2Fields }\n\t}`
+
+		rqbv2.push(rqbv2Relation);
 		rqb.push(rqbRelation);
 	}
 
@@ -287,7 +300,18 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 	let importsStr: string | undefined = [drizzleImportsStr, pgImportsStr].filter((e) => e !== undefined).join('\n');
 	if (!importsStr.length) importsStr = undefined;
 
-	const output = [importsStr, ...pgEnums, ...tables, ...rqb].filter((e) => e !== undefined).join('\n\n');
+	const schemaFileName = options.schemaPath ? path.basename(options.schemaPath, path.extname(options.schemaPath)) : 'schema'
 
-	return output;
+	let rqbv2Imports = [
+		`import { defineRelations } from "drizzle-orm";`,
+		`import * as schema from "./${schemaFileName}";`
+	];
+
+	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));` 
+
+	const relations = [...rqbv2Imports, rqbv2Relations].join('\n')
+
+	const schema = [importsStr, ...pgEnums, ...tables, ...(options.generator.config['version'] == 'v1' ? rqb : [])].filter((e) => e !== undefined).join('\n\n');
+
+	return [schema, relations] as [string, string];
 };
