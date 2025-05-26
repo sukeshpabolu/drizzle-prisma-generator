@@ -220,7 +220,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 		tables.push(table);
 
 		if (!relFields.length) continue;
-		if (options.version == 'v1') drizzleImports.add('relations');
+		if (options.generator.config['version'] == 'v1') drizzleImports.add('relations');
 
 		const relationArgs = new Set<string>();
 		const rqbFields = relFields.map((field) => {
