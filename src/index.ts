@@ -61,7 +61,7 @@ export const generator = generatorHandler({
 
 		recursiveWrite(schemaPath, schema);
 
-		if (options.generator.config['version'] == 'v1') {
+		if (options.generator.config['relationsVersion'] == 'v1') {
 			const relationsPath = folderPath.endsWith('.ts')
 				? folderPath
 				: path.join(folderPath, '/relations.ts');
