@@ -1,46 +1,47 @@
 import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
+import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
 
 const pgImports = new Set<string>();
 const drizzleImports = new Set<string>();
 pgImports.add('pgTable');
 
-const prismaToDrizzleType = (type: string, colDbName: string, defVal?: string) => {
+const prismaToDrizzleType = (type: string, colExpr: string, defVal?: string) => {
 	switch (type.toLowerCase()) {
 		case 'bigint':
 			pgImports.add('bigint');
-			return `bigint('${colDbName}', { mode: 'bigint' })`;
+			return `bigint(${[colExpr, "{ mode: 'bigint' }"].filter(Boolean).join(', ')})`;
 		case 'boolean':
 			pgImports.add('boolean');
-			return `boolean('${colDbName}')`;
+			return `boolean(${colExpr})`;
 		case 'bytes':
 			// Drizzle doesn't support it yet...
 			throw new GeneratorError("Drizzle ORM doesn't support binary data type for PostgreSQL");
 		case 'datetime':
 			pgImports.add('timestamp');
-			return `timestamp('${colDbName}', { precision: 3 })`;
+			return `timestamp(${[colExpr, "{ precision: 3 }"].filter(Boolean).join(', ')})`;
 		case 'decimal':
 			pgImports.add('decimal');
-			return `decimal('${colDbName}', { precision: 65, scale: 30 })`;
+			return `decimal(${[colExpr, "{ precision: 65, scale: 30 }"].filter(Boolean).join(', ')})`;
 		case 'float':
 			pgImports.add('doublePrecision');
-			return `doublePrecision('${colDbName}')`;
+			return `doublePrecision(${colExpr})`;
 		case 'json':
 			pgImports.add('jsonb');
-			return `jsonb('${colDbName}')`;
+			return `jsonb(${colExpr})`;
 		case 'int':
 			if (defVal === 'autoincrement') {
 				pgImports.add('serial');
-				return `serial('${colDbName}')`;
+				return `serial(${colExpr})`;
 			}
 
 			pgImports.add('integer');
-			return `integer('${colDbName}')`;
+			return `integer(${colExpr})`;
 		case 'string':
 			pgImports.add('text');
-			return `text('${colDbName}')`;
+			return `text(${colExpr})`;
 		default:
 			return undefined;
 	}
@@ -117,17 +118,18 @@ const addColumnModifiers = (field: DMMF.Field, column: string) => {
 const prismaToDrizzleColumn = (
 	field: DMMF.Field,
 ): string | undefined => {
-	const colDbName = s(field.dbName ?? field.name);
+	const colDbName = field.dbName && s(field.dbName);
+	const colExpr = colDbName ? `'${colDbName}'` : '';
 	let column = `\t${field.name}: `;
 
 	if (field.kind === 'enum') {
-		column = column + `${field.type}('${colDbName}')`;
+		column = column + `${field.type}(${colExpr})`;
 	} else {
 		const defVal = typeof field.default === 'object' && !Array.isArray(field.default)
 			? (field.default as { name: string }).name
 			: undefined;
 
-		const drizzleType = prismaToDrizzleType(field.type, colDbName, defVal);
+		const drizzleType = prismaToDrizzleType(field.type, colExpr, defVal);
 		if (!drizzleType) return undefined;
 
 		column = column + drizzleType;
@@ -179,7 +181,7 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 		const relations = relFields.map<string | undefined>((field) => {
 			if (!field?.relationFromFields?.length) return undefined;
 
-			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? field.name}_fkey`);
+			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)}_fkey`);
 			let deleteAction: string;
 			switch (field.relationOnDelete) {
 				case undefined:

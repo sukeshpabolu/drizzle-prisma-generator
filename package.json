@@ -17,6 +17,7 @@
 		"@arethetypeswrong/cli": "^0.15.3",
 		"@types/node": "^20.12.7",
 		"dprint": "^0.45.1",
+		"drizzle-orm": "^0.43.1",
 		"prisma": "^5.12.1",
 		"tsup": "^8.0.2",
 		"tsx": "^4.7.2",
