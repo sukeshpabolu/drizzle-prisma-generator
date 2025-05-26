@@ -1,41 +1,42 @@
 import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
+import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
 import path from 'path';
 
 const sqliteImports = new Set<string>(['sqliteTable']);
 const drizzleImports = new Set<string>([]);
 
-const prismaToDrizzleType = (type: string, colDbName: string) => {
+const prismaToDrizzleType = (type: string, colExpr: string) => {
 	switch (type.toLowerCase()) {
 		case 'bigint':
 			sqliteImports.add('int');
-			return `int('${colDbName}')`;
+			return `int(${colExpr})`;
 		case 'boolean':
 			sqliteImports.add('int');
-			return `int('${colDbName}', { mode: 'boolean' })`;
+			return `int(${[colExpr, "{ mode: 'boolean' }"].filter(Boolean).join(', ')})`;
 		case 'bytes':
 			sqliteImports.add('blob');
-			return `blob('${colDbName}', { mode: 'buffer' })`;
+			return `blob(${[colExpr, "{ mode: 'buffer' }"].filter(Boolean).join(', ')})`;
 		case 'datetime':
 			sqliteImports.add('numeric');
-			return `numeric('${colDbName}')`;
+			return `numeric(${colExpr})`
 		case 'decimal':
 			sqliteImports.add('numeric');
-			return `numeric('${colDbName}')`;
+			return `numeric(${colExpr})`
 		case 'float':
 			sqliteImports.add('real');
-			return `real('${colDbName}')`;
+			return `real(${colExpr})`
 		case 'json':
 			sqliteImports.add('text');
-			return `text('${colDbName}', { mode: 'json' })`;
+			return `text(${[colExpr, "{ mode: 'json' }"].filter(Boolean).join(', ')})`;
 		case 'int':
 			sqliteImports.add('int');
-			return `int('${colDbName}')`;
+			return `int(${colExpr})`;
 		case 'string':
 			sqliteImports.add('text');
-			return `text('${colDbName}')`;
+			return `text(${colExpr})`;
 		default:
 			return undefined;
 	}
@@ -111,10 +112,11 @@ const addColumnModifiers = (field: DMMF.Field, column: string) => {
 const prismaToDrizzleColumn = (
 	field: DMMF.Field,
 ): string | undefined => {
-	const colDbName = s(field.dbName ?? field.name);
+	const colDbName = field.dbName && s(field.dbName);
+	const colExpr = colDbName ? `'${colDbName}'` : '';
 	let column = `\t${field.name}: `;
 
-	const drizzleType = prismaToDrizzleType(field.type, colDbName);
+	const drizzleType = prismaToDrizzleType(field.type, colExpr);
 	if (!drizzleType) return undefined;
 
 	column = column + drizzleType;
@@ -151,7 +153,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 		const relations = relFields.map<string | undefined>((field) => {
 			if (!field?.relationFromFields?.length) return undefined;
 
-			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? field.name}_fkey`);
+			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)}_fkey`);
 			let deleteAction: string;
 			switch (field.relationOnDelete) {
 				case undefined:
@@ -176,7 +178,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 
 			sqliteImports.add('foreignKey');
 
-			return `\t'${fkeyName}': foreignKey({\n\t\tname: '${fkeyName}',\n\t\tcolumns: [${
+			return `\tforeignKey({\n\t\tname: '${fkeyName}',\n\t\tcolumns: [${
 				field.relationFromFields.map((rel) => `${schemaTable.name}.${rel}`).join(', ')
 			}],\n\t\tforeignColumns: [${field.relationToFields!.map((rel) => `${field.type}.${rel}`).join(', ')}]\n\t})${
 				deleteAction && deleteAction !== 'no action' ? `\n\t\t.onDelete('${deleteAction}')` : ''
@@ -192,9 +194,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 				const idxName = s(idx.name ?? `${schemaTable.name}_${idx.fields.join('_')}_key`);
 				// _key comes from Prisma, if their AI is to be trusted
 
-				return `\t'${
-					idx.name ? idxName : `${idxName.slice(0, idxName.length - 4)}_unique_idx`
-				}': uniqueIndex('${idxName}')\n\t\t.on(${idx.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')})`;
+				return `\tuniqueIndex('${idxName}')\n\t\t.on(${idx.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')})`;
 			});
 
 			indexes.push(...uniques);
@@ -206,7 +206,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 			const pk = schemaTable.primaryKey!;
 			const pkName = s(pk.name ?? `${schemaTable.name}_cpk`);
 
-			const pkField = `\t'${pkName}': primaryKey({\n\t\tname: '${pkName}',\n\t\tcolumns: [${
+			const pkField = `\tprimaryKey({\n\t\tname: '${pkName}',\n\t\tcolumns: [${
 				pk.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')
 			}]\n\t})`;
 
@@ -215,7 +215,7 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 
 		const table = `export const ${schemaTable.name} = sqliteTable('${tableDbName}', {\n${
 			Object.values(columnFields).join(',\n')
-		}\n}${indexes.length ? `, (${schemaTable.name}) => ({\n${indexes.join(',\n')}\n})` : ''});`;
+		}\n}${indexes.length ? `, (${schemaTable.name}) => [\n${indexes.join(',\n')}\n]` : ''});`;
 
 		tables.push(table);
 

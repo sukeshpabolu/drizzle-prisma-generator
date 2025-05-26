@@ -17,6 +17,8 @@ generator drizzle {
 :warning: - binary types in `MySQL`, `PostgreSQL` are not yet supported by `drizzle-orm`, therefore will throw an error.  
 :warning: - generator only supports `postgresql`, `mysql`, `sqlite` data providers, others will throw an error.  
 :warning: - currently the supported value for `relationsVersion` is v1. if `relationsVersion` is not provided, the relations file for rqbv2 is generated and saved inside the parent folder of `schema.ts` as `relations.ts`
+:warning: - generator supports `snake_case`, `camelCase` as casing while generating foreign key constraints, others will not do anything
+:warning: - currently the supported value for version is v1. if version is not provided, the relations file for rqbv2 is generated and saved inside the parent folder of `schema.ts` as `relations.ts`
 
 -  Install `drizzle-orm`: `pnpm add drizzle-orm`  
 -  Import schema from specified output file\folder  

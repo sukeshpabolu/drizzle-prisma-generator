@@ -1,46 +1,47 @@
 import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
+import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
 import path from 'path';
 
 const mySqlImports = new Set<string>(['mysqlTable']);
 const drizzleImports = new Set<string>([]);
 
-const prismaToDrizzleType = (type: string, colDbName: string, prismaEnum?: UnReadonlyDeep<DMMF.DatamodelEnum>) => {
+const prismaToDrizzleType = (type: string, colExpr: string, prismaEnum?: UnReadonlyDeep<DMMF.DatamodelEnum>) => {
 	if (prismaEnum) {
 		mySqlImports.add('mysqlEnum');
-		return `mysqlEnum('${colDbName}', [${prismaEnum.values.map((val) => `'${val.dbName ?? val.name}'`).join(', ')}])`;
+		return `mysqlEnum('${[colExpr, `[${prismaEnum.values.map((val) => `'${val.dbName ?? val.name}'`).join(', ')}]`].filter(Boolean).join(', ')})`;
 	}
 
 	switch (type.toLowerCase()) {
 		case 'bigint':
 			mySqlImports.add('bigint');
-			return `bigint('${colDbName}', { mode: 'bigint' })`;
+			return `bigint(${[colExpr, "{ mode: 'bigint' }"].filter(Boolean).join(', ')})`;
 		case 'boolean':
 			mySqlImports.add('boolean');
-			return `boolean('${colDbName}')`;
+			return `boolean(${colExpr})`;
 		case 'bytes':
 			// Drizzle doesn't support it yet...
 			throw new GeneratorError("Drizzle ORM doesn't support binary data type for MySQL");
 		case 'datetime':
 			mySqlImports.add('datetime');
-			return `datetime('${colDbName}', { fsp: 3 })`;
+			return `datetime(${[colExpr, "{ fsp: 3 }"].filter(Boolean).join(', ')})`;
 		case 'decimal':
 			mySqlImports.add('decimal');
-			return `decimal('${colDbName}', { precision: 65, scale: 30 })`;
+			return `decimal(${[colExpr, "{ precision: 65, scale: 30 }"].filter(Boolean).join(', ')})`;
 		case 'float':
 			mySqlImports.add('double');
-			return `double('${colDbName}')`;
+			return `double(${colExpr})`;
 		case 'json':
 			mySqlImports.add('json');
-			return `json('${colDbName}')`;
+			return `json(${colExpr})`;
 		case 'int':
 			mySqlImports.add('int');
-			return `int('${colDbName}')`;
+			return `int(${colExpr})`;
 		case 'string':
 			mySqlImports.add('varchar');
-			return `varchar('${colDbName}', { length: 191 })`;
+			return `varchar(${[colExpr, "{ length: 191 }"].filter(Boolean).join(', ')})`;
 		default:
 			return undefined;
 	}
@@ -118,12 +119,13 @@ const prismaToDrizzleColumn = (
 	field: DMMF.Field,
 	enums: UnReadonlyDeep<DMMF.DatamodelEnum[]>,
 ): string | undefined => {
-	const colDbName = s(field.dbName ?? field.name);
+	const colDbName = field.dbName && s(field.dbName);
+	const colExpr = colDbName ? `'${colDbName}'` : '';
 	let column = `\t${field.name}: `;
 
 	const drizzleType = prismaToDrizzleType(
 		field.type,
-		colDbName,
+		colExpr,
 		field.kind === 'enum' ? enums.find((e) => e.name === field.type)! : undefined,
 	);
 	if (!drizzleType) return undefined;
@@ -161,8 +163,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 		const relFields = schemaTable.fields.filter((field) => field.relationToFields && field.relationFromFields);
 		const relations = relFields.map<string | undefined>((field) => {
 			if (!field?.relationFromFields?.length) return undefined;
-
-			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? field.name}_fkey`);
+			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)}_fkey`);
 			let deleteAction: string;
 			switch (field.relationOnDelete) {
 				case undefined:
@@ -187,7 +188,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 
 			mySqlImports.add('foreignKey');
 
-			return `\t'${fkeyName}': foreignKey({\n\t\tname: '${fkeyName}',\n\t\tcolumns: [${
+			return `\tforeignKey({\n\t\tname: '${fkeyName}',\n\t\tcolumns: [${
 				field.relationFromFields.map((rel) => `${schemaTable.name}.${rel}`).join(', ')
 			}],\n\t\tforeignColumns: [${field.relationToFields!.map((rel) => `${field.type}.${rel}`).join(', ')}]\n\t})${
 				deleteAction && deleteAction !== 'no action' ? `\n\t\t.onDelete('${deleteAction}')` : ''
@@ -203,9 +204,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 				const idxName = s(idx.name ?? `${schemaTable.name}_${idx.fields.join('_')}_key`);
 				// _key comes from Prisma, if their AI is to be trusted
 
-				return `\t'${
-					idx.name ? idxName : `${idxName.slice(0, idxName.length - 4)}_unique_idx`
-				}': uniqueIndex('${idxName}')\n\t\t.on(${idx.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')})`;
+				return `\tuniqueIndex('${idxName}')\n\t\t.on(${idx.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')})`;
 			});
 
 			indexes.push(...uniques);
@@ -217,7 +216,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 			const pk = schemaTable.primaryKey!;
 			const pkName = s(pk.name ?? `${schemaTable.name}_cpk`);
 
-			const pkField = `\t'${pkName}': primaryKey({\n\t\tname: '${pkName}',\n\t\tcolumns: [${
+			const pkField = `\tprimaryKey({\n\t\tname: '${pkName}',\n\t\tcolumns: [${
 				pk.fields.map((f) => `${schemaTable.name}.${f}`).join(', ')
 			}]\n\t})`;
 
@@ -225,7 +224,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 		}
 		const table = `export const ${schemaTable.name} = mysqlTable('${tableDbName}', {\n${
 			Object.values(columnFields).join(',\n')
-		}\n}${indexes.length ? `, (${schemaTable.name}) => ({\n${indexes.join(',\n')}\n})` : ''});`;
+		}\n}${indexes.length ? `, (${schemaTable.name}) => [\n${indexes.join(',\n')}\n]` : ''});`;
 
 		tables.push(table);
 
