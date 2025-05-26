@@ -70,6 +70,8 @@ const addColumnModifiers = (field: DMMF.Field, column: string) => {
 
 				if (value.name === 'now') {
 					column = column + `.default(sql\`DATE('now')\`)`;
+
+					drizzleImports.add('sql');
 					break;
 				}
 
