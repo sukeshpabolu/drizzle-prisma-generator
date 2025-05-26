@@ -1,7 +1,7 @@
+import { convertCase } from '@/util/casing';
 import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
-import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
 import path from 'path';
 
@@ -21,13 +21,13 @@ const prismaToDrizzleType = (type: string, colExpr: string) => {
 			return `blob(${[colExpr, "{ mode: 'buffer' }"].filter(Boolean).join(', ')})`;
 		case 'datetime':
 			sqliteImports.add('numeric');
-			return `numeric(${colExpr})`
+			return `numeric(${colExpr})`;
 		case 'decimal':
 			sqliteImports.add('numeric');
-			return `numeric(${colExpr})`
+			return `numeric(${colExpr})`;
 		case 'float':
 			sqliteImports.add('real');
-			return `real(${colExpr})`
+			return `real(${colExpr})`;
 		case 'json':
 			sqliteImports.add('text');
 			return `text(${[colExpr, "{ mode: 'json' }"].filter(Boolean).join(', ')})`;
@@ -155,7 +155,11 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 		const relations = relFields.map<string | undefined>((field) => {
 			if (!field?.relationFromFields?.length) return undefined;
 
-			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)}_fkey`);
+			const fkeyName = s(
+				`${schemaTable.dbName ?? schemaTable.name}_${
+					field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)
+				}_fkey`,
+			);
 			let deleteAction: string;
 			switch (field.relationOnDelete) {
 				case undefined:
@@ -243,17 +247,18 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 		const rqbRelation =
 			`export const ${schemaTable.name}Relations = relations(${schemaTable.name}, ({ ${argString} }) => ({\n${rqbFields}\n}));`;
 
-		const rqbv2Fields = relFields.map(field => {
+		const rqbv2Fields = relFields.map((field) => {
 			const relName = s(field.relationName ?? '');
 			return `\t\t${field.name}: ${
 				field.relationFromFields?.length
-				? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${field.relationFromFields.at(0)},\n\t\t\tto: r.${field.type}.${
-				field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
-				: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
-			}`
+					? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${
+						field.relationFromFields.at(0)
+					},\n\t\t\tto: r.${field.type}.${field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
+					: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
+			}`;
 		}).join(',\n');
 
-		const rqbv2Relation = `\t${schemaTable.name}: {\n${ rqbv2Fields }\n\t}`
+		const rqbv2Relation = `\t${schemaTable.name}: {\n${rqbv2Fields}\n\t}`;
 
 		rqbv2.push(rqbv2Relation);
 		rqb.push(rqbRelation);
@@ -271,18 +276,22 @@ export const generateSQLiteSchema = (options: GeneratorOptions) => {
 
 	let importsStr: string | undefined = [drizzleImportsStr, sqliteImportsStr].filter((e) => e !== undefined).join('\n');
 	if (!importsStr.length) importsStr = undefined;
-	const schemaFileName = options.schemaPath ? path.basename(options.schemaPath, path.extname(options.schemaPath)) : 'schema'
+	const schemaFileName = options.schemaPath
+		? path.basename(options.schemaPath, path.extname(options.schemaPath))
+		: 'schema';
 
 	let rqbv2Imports = [
 		`import { defineRelations } from "drizzle-orm";`,
-		`import * as schema from "./${schemaFileName}";`
+		`import * as schema from "./${schemaFileName}";`,
 	];
 
-	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));` 
+	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));`;
 
-	const relations = [...rqbv2Imports, rqbv2Relations].join('\n')
+	const relations = [...rqbv2Imports, rqbv2Relations].join('\n');
 
-	const schema = [importsStr, ...tables, ...(options.generator.config['relationsVersion'] == 'v1' ? rqb : [])].filter((e) => e !== undefined).join('\n\n');
+	const schema = [importsStr, ...tables, ...(options.generator.config['relationsVersion'] == 'v1' ? rqb : [])].filter((
+		e,
+	) => e !== undefined).join('\n\n');
 
 	return [schema, relations] as [string, string];
 };

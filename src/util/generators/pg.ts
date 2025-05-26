@@ -1,7 +1,7 @@
+import { convertCase } from '@/util/casing';
 import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
-import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
 import path from 'path';
 
@@ -22,10 +22,10 @@ const prismaToDrizzleType = (type: string, colExpr: string, defVal?: string) => 
 			throw new GeneratorError("Drizzle ORM doesn't support binary data type for PostgreSQL");
 		case 'datetime':
 			pgImports.add('timestamp');
-			return `timestamp(${[colExpr, "{ precision: 3 }"].filter(Boolean).join(', ')})`;
+			return `timestamp(${[colExpr, '{ precision: 3 }'].filter(Boolean).join(', ')})`;
 		case 'decimal':
 			pgImports.add('decimal');
-			return `decimal(${[colExpr, "{ precision: 65, scale: 30 }"].filter(Boolean).join(', ')})`;
+			return `decimal(${[colExpr, '{ precision: 65, scale: 30 }'].filter(Boolean).join(', ')})`;
 		case 'float':
 			pgImports.add('doublePrecision');
 			return `doublePrecision(${colExpr})`;
@@ -183,7 +183,11 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 		const relations = relFields.map<string | undefined>((field) => {
 			if (!field?.relationFromFields?.length) return undefined;
 
-			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)}_fkey`);
+			const fkeyName = s(
+				`${schemaTable.dbName ?? schemaTable.name}_${
+					field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)
+				}_fkey`,
+			);
 			let deleteAction: string;
 			switch (field.relationOnDelete) {
 				case undefined:
@@ -271,17 +275,18 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 		const rqbRelation =
 			`export const ${schemaTable.name}Relations = relations(${schemaTable.name}, ({ ${argString} }) => ({\n${rqbFields}\n}));`;
 
-		const rqbv2Fields = relFields.map(field => {
+		const rqbv2Fields = relFields.map((field) => {
 			const relName = s(field.relationName ?? '');
 			return `\t\t${field.name}: ${
 				field.relationFromFields?.length
-				? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${field.relationFromFields.at(0)},\n\t\t\tto: r.${field.type}.${
-				field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
-				: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
-			}`
+					? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${
+						field.relationFromFields.at(0)
+					},\n\t\t\tto: r.${field.type}.${field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
+					: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
+			}`;
 		}).join(',\n');
 
-		const rqbv2Relation = `\t${schemaTable.name}: {\n${ rqbv2Fields }\n\t}`
+		const rqbv2Relation = `\t${schemaTable.name}: {\n${rqbv2Fields}\n\t}`;
 
 		rqbv2.push(rqbv2Relation);
 		rqb.push(rqbRelation);
@@ -300,18 +305,25 @@ export const generatePgSchema = (options: GeneratorOptions) => {
 	let importsStr: string | undefined = [drizzleImportsStr, pgImportsStr].filter((e) => e !== undefined).join('\n');
 	if (!importsStr.length) importsStr = undefined;
 
-	const schemaFileName = options.schemaPath ? path.basename(options.schemaPath, path.extname(options.schemaPath)) : 'schema'
+	const schemaFileName = options.schemaPath
+		? path.basename(options.schemaPath, path.extname(options.schemaPath))
+		: 'schema';
 
 	let rqbv2Imports = [
 		`import { defineRelations } from "drizzle-orm";`,
-		`import * as schema from "./${schemaFileName}";`
+		`import * as schema from "./${schemaFileName}";`,
 	];
 
-	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));` 
+	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));`;
 
-	const relations = [...rqbv2Imports, rqbv2Relations].join('\n')
+	const relations = [...rqbv2Imports, rqbv2Relations].join('\n');
 
-	const schema = [importsStr, ...pgEnums, ...tables, ...(options.generator.config['relationsVersion'] == 'v1' ? rqb : [])].filter((e) => e !== undefined).join('\n\n');
+	const schema = [
+		importsStr,
+		...pgEnums,
+		...tables,
+		...(options.generator.config['relationsVersion'] == 'v1' ? rqb : []),
+	].filter((e) => e !== undefined).join('\n\n');
 
 	return [schema, relations] as [string, string];
 };

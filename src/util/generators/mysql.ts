@@ -1,7 +1,7 @@
+import { convertCase } from '@/util/casing';
 import { s } from '@/util/escape';
 import { extractManyToManyModels } from '@/util/extract-many-to-many-models';
 import { UnReadonlyDeep } from '@/util/un-readonly-deep';
-import { convertCase } from '@/util/casing';
 import { type DMMF, GeneratorError, type GeneratorOptions } from '@prisma/generator-helper';
 import path from 'path';
 
@@ -11,7 +11,11 @@ const drizzleImports = new Set<string>([]);
 const prismaToDrizzleType = (type: string, colExpr: string, prismaEnum?: UnReadonlyDeep<DMMF.DatamodelEnum>) => {
 	if (prismaEnum) {
 		mySqlImports.add('mysqlEnum');
-		return `mysqlEnum('${[colExpr, `[${prismaEnum.values.map((val) => `'${val.dbName ?? val.name}'`).join(', ')}]`].filter(Boolean).join(', ')})`;
+		return `mysqlEnum('${
+			[colExpr, `[${prismaEnum.values.map((val) => `'${val.dbName ?? val.name}'`).join(', ')}]`].filter(Boolean).join(
+				', ',
+			)
+		})`;
 	}
 
 	switch (type.toLowerCase()) {
@@ -26,10 +30,10 @@ const prismaToDrizzleType = (type: string, colExpr: string, prismaEnum?: UnReado
 			throw new GeneratorError("Drizzle ORM doesn't support binary data type for MySQL");
 		case 'datetime':
 			mySqlImports.add('datetime');
-			return `datetime(${[colExpr, "{ fsp: 3 }"].filter(Boolean).join(', ')})`;
+			return `datetime(${[colExpr, '{ fsp: 3 }'].filter(Boolean).join(', ')})`;
 		case 'decimal':
 			mySqlImports.add('decimal');
-			return `decimal(${[colExpr, "{ precision: 65, scale: 30 }"].filter(Boolean).join(', ')})`;
+			return `decimal(${[colExpr, '{ precision: 65, scale: 30 }'].filter(Boolean).join(', ')})`;
 		case 'float':
 			mySqlImports.add('double');
 			return `double(${colExpr})`;
@@ -41,7 +45,7 @@ const prismaToDrizzleType = (type: string, colExpr: string, prismaEnum?: UnReado
 			return `int(${colExpr})`;
 		case 'string':
 			mySqlImports.add('varchar');
-			return `varchar(${[colExpr, "{ length: 191 }"].filter(Boolean).join(', ')})`;
+			return `varchar(${[colExpr, '{ length: 191 }'].filter(Boolean).join(', ')})`;
 		default:
 			return undefined;
 	}
@@ -163,7 +167,11 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 		const relFields = schemaTable.fields.filter((field) => field.relationToFields && field.relationFromFields);
 		const relations = relFields.map<string | undefined>((field) => {
 			if (!field?.relationFromFields?.length) return undefined;
-			const fkeyName = s(`${schemaTable.dbName ?? schemaTable.name}_${field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)}_fkey`);
+			const fkeyName = s(
+				`${schemaTable.dbName ?? schemaTable.name}_${
+					field.dbName ?? convertCase(field.name, options.generator.config['casing'] as string)
+				}_fkey`,
+			);
 			let deleteAction: string;
 			switch (field.relationOnDelete) {
 				case undefined:
@@ -250,18 +258,19 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 		const rqbRelation =
 			`export const ${schemaTable.name}Relations = relations(${schemaTable.name}, ({ ${argString} }) => ({\n${rqbFields}\n}));`;
 
-		const rqbv2Fields = relFields.map(field => {
+		const rqbv2Fields = relFields.map((field) => {
 			const relName = s(field.relationName ?? '');
 			return `\t\t${field.name}: ${
 				field.relationFromFields?.length
-				? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${field.relationFromFields.at(0)},\n\t\t\tto: r.${field.type}.${
-				field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
-				: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
-			}`
+					? `r.one.${field.type}({\n\t\t\tfrom: r.${schemaTable.name}.${
+						field.relationFromFields.at(0)
+					},\n\t\t\tto: r.${field.type}.${field.relationToFields?.at(0)},\n\t\t\talias: '${relName}'\n\t\t})`
+					: `r.many.${field.type}({\n\t\t\talias: '${relName}'\n\t\t})`
+			}`;
 		}).join(',\n');
 
-		const rqbv2Relation = `\t${schemaTable.name}: {\n${ rqbv2Fields }\n\t}`
-		
+		const rqbv2Relation = `\t${schemaTable.name}: {\n${rqbv2Fields}\n\t}`;
+
 		rqbv2.push(rqbv2Relation);
 		rqb.push(rqbRelation);
 	}
@@ -279,18 +288,22 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 	let importsStr: string | undefined = [drizzleImportsStr, mySqlImportsStr].filter((e) => e !== undefined).join('\n');
 	if (!importsStr.length) importsStr = undefined;
 
-	const schemaFileName = options.schemaPath ? path.basename(options.schemaPath, path.extname(options.schemaPath)) : 'schema'
+	const schemaFileName = options.schemaPath
+		? path.basename(options.schemaPath, path.extname(options.schemaPath))
+		: 'schema';
 
 	let rqbv2Imports = [
 		`import { defineRelations } from "drizzle-orm";`,
-		`import * as schema from "./${schemaFileName}";`
+		`import * as schema from "./${schemaFileName}";`,
 	];
 
-	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));` 
+	const rqbv2Relations = `\nexport const relations = defineRelations(schema, (r) => ({\n${rqbv2.join(',\n')}\n}));`;
 
-	const relations = [...rqbv2Imports, rqbv2Relations].join('\n')
+	const relations = [...rqbv2Imports, rqbv2Relations].join('\n');
 
-	const schema = [importsStr, ...tables, ...(options.generator.config['relationsVersion'] == 'v1' ? rqb : [])].filter((e) => e !== undefined).join('\n\n');
+	const schema = [importsStr, ...tables, ...(options.generator.config['relationsVersion'] == 'v1' ? rqb : [])].filter((
+		e,
+	) => e !== undefined).join('\n\n');
 
 	return [schema, relations] as [string, string];
 };
