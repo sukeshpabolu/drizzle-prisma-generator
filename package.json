@@ -9,6 +9,7 @@
 		"b": "pnpm build",
 		"pack": "(cd dist && npm pack --pack-destination ..) && rm -f package.tgz && mv *.tgz package.tgz",
 		"publish": "npm publish package.tgz",
+		"postinstall": "build ./src/index.ts --outdir ./build",
 		"test": "vitest run",
 		"lint": "dprint check --list-different"
 	},
