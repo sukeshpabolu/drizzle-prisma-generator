@@ -72,3 +72,4 @@ export const generator = generatorHandler({
 });
 
 export default generator;
+export { generateMySqlSchema, generatePgSchema, generateSQLiteSchema };
