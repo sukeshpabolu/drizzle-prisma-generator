@@ -230,7 +230,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 		tables.push(table);
 
 		if (!relFields.length) continue;
-		if (options.generator.config['relationsVersion'] == 'v1') drizzleImports.add('relations');
+		if (options.generator.config['relationsVersion'] === 'v1') drizzleImports.add('relations');
 
 		const relationArgs = new Set<string>();
 		const rqbFields = relFields.map((field) => {
@@ -291,7 +291,7 @@ export const generateMySqlSchema = (options: GeneratorOptions) => {
 
 	const relations = [...rqbv2Imports, rqbv2Relations].join('\n')
 
-	const schema = [importsStr, ...tables, ...(options.generator.config['relationsVersion'] == 'v1' ? rqb : [])].filter((e) => e !== undefined).join('\n\n');
+	const schema = [importsStr, ...tables, ...(options.generator.config['relationsVersion'] === 'v1' ? rqb : [])].filter((e) => e !== undefined).join('\n\n');
 
 	return [schema, relations] as [string, string];
 };
